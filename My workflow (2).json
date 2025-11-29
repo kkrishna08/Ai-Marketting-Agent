@@ -1,0 +1,588 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Research",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Subject_for_research",
+              "placeholder": "enterprise storage news",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Lookback_days",
+              "fieldType": "number",
+              "placeholder": "3",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Messaging_focus",
+              "placeholder": "storage efficiency,"
+            }
+          ]
+        },
+        "options": {
+          "buttonLabel": "Submit"
+        }
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [
+        -32,
+        0
+      ],
+      "id": "75c5fe91-93d1-4e1d-bd87-fff8d3f683c7",
+      "name": "On form submission",
+      "webhookId": "4c26728b-7f82-4baf-abe1-c5b049b58f62",
+      "notesInFlow": true,
+      "notes": "This collects the research topic, lookback days, and messaging focus.\n"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ba9a080d-4616-4c62-9d37-713c1b2f117f",
+              "name": "rss_sources",
+              "value": "[    \"https://www.storagereview.com/feed\", \"https://www.theregister.com/headlines/storage.rss\",   \"https://www.storagenewsletter.com/feed/\",   \"https://www.enterprisestorageforum.com/feed/\",   \"https://www.storagenewsletter.com/feed/\",   \"https://www.datastorageconnection.com/rss\",   \"https://www.storagereview.com/feed/\",   \"https://www.computerweekly.com/rss/Storage\",   \"https://www.techradar.com/rss\",   \"https://www.networkworld.com/category/storage/index.rss\" ]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "f935b77e-87ee-40f6-9133-8d399963a06c",
+      "name": "Edit Fields",
+      "notesInFlow": true,
+      "notes": "This node defines a curated list of trusted enterprise storage RSS sources."
+    },
+    {
+      "parameters": {
+        "url": "={{$json[\"rss_url\"]}}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "d34e6010-3660-46e5-85a8-009b3462b79d",
+      "name": "RSS Read",
+      "notesInFlow": true,
+      "onError": "continueRegularOutput",
+      "notes": "This node reads each RSS feed URL (coming from the previous splitter node) and extracts articles automatically — including title, link, author, publish date, etc."
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $items(); // receives all RSS items\nlet text = '';\n\nitems.forEach((item, index) => {\n  const title = item.json.title || 'No title';\n  const summary = item.json.contentSnippet || item.json.description || 'No description';\n  const link = item.json.link || 'No link';\n  text += `Article ${index + 1}:\\nTitle: ${title}\\nSummary: ${summary}\\nLink: ${link}\\n\\n`;\n});\n\nreturn [\n  {\n    json: {\n      articles_text: text,\n      total_articles: items.length\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "cd5ac2cc-61d6-4e83-89d6-2a17d5313aa5",
+      "name": "Format Articles",
+      "notesInFlow": true,
+      "notes": "This node takes all the raw RSS articles and formats them into structured text.\nIt converts multiple article objects into one clean paragraph containing:\nTitle\n Summary (or description)\n Link\n Article numbering"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Here are {{$json[\"total_articles\"]}} news articles:\n\n{{$json[\"articles_text\"]}}\n\nTASK:\n1. Write a concise summary of all articles (max 200 words).\n2. Extract the PAIN POINTS faced by enterprise storage customers (bullet points only).\n\nReturn ONLY valid JSON in this exact format (no extra text, no markdown):\n\n{\n  \"summary\": \"string\",\n  \"pain_points\": [\n    \"string\",\n    \"string\",\n    \"string\"\n  ]\n}\n",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a B2B marketing analyst specializing in enterprise storage. You analyze news articles and extract business pain points and return JSON only."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1456,
+        0
+      ],
+      "id": "8fb87904-2c2d-4966-aeb0-64d0cbf1619f",
+      "name": "Basic LLM Chain",
+      "notesInFlow": true,
+      "notes": "This node sends the formatted RSS article text to the AI model and extracts:\nKey industry insights\n Main pain points\n News summary from 164 recent articles"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.0-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        320
+      ],
+      "id": "de9c9733-91e0-47ca-bf17-fefd8909cd95",
+      "name": "Google Gemini Chat Model",
+      "notesInFlow": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Dw6OAPg0xlqJpxoM",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "notes": "This node takes the structured output from the Basic LLM Chain and transforms it into:\n\nPain points\n\nICP (Ideal Customer Profile)\n\nBig Idea\n\nFinal 5-slide carousel content"
+    },
+    {
+      "parameters": {
+        "jsCode": "let raw = $json.text || $json.output || '';\n// Remove markdown code fences if present\nraw = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\n\nlet obj;\ntry {\n  obj = JSON.parse(raw);\n} catch (e) {\n  // If parsing fails, return the raw text so you can debug\n  return [{ json: { parse_error: e.message, raw } }];\n}\n\nreturn [{\n  json: {\n    summary: obj.summary,\n    pain_points: obj.pain_points\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        0
+      ],
+      "id": "5888cce8-e1b6-4705-b444-3d9d7c923182",
+      "name": "JSON Parsor"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=We have analyzed enterprise storage news.\n\nSummary of news:\n{{$json[\"summary\"]}}\n\nPain points found:\n{{$json[\"pain_points\"]}}\n\nWe want to focus the messaging on:\n\"{{ $item(0).$node[\"On form submission\"].json.Messaging_focus }}\"\n\nTASK:\n1. Identify ONE MAIN painful issue for enterprise storage buyers.\n2. Define the ICP (ideal customer profile) in 2–4 lines.\n3. Create a LinkedIn carousel concept with EXACTLY 5 slides.\n\nReturn ONLY valid JSON in this exact format (no extra text, no markdown):\n\n{\n  \"main_pain_point\": \"string\",\n  \"icp\": \"string\",\n  \"big_idea\": \"string\",\n  \"slides\": [\n    {\n      \"slide_number\": 1,\n      \"title\": \"string\",\n      \"copy\": \"2-4 short lines of copy\",\n      \"image_prompt\": \"detailed image prompt for a modern B2B LinkedIn carousel slide\"\n    },\n    {\n      \"slide_number\": 2,\n      \"title\": \"string\",\n      \"copy\": \"string\",\n      \"image_prompt\": \"string\"\n    },\n    {\n      \"slide_number\": 3,\n      \"title\": \"string\",\n      \"copy\": \"string\",\n      \"image_prompt\": \"string\"\n    },\n    {\n      \"slide_number\": 4,\n      \"title\": \"string\",\n      \"copy\": \"string\",\n      \"image_prompt\": \"string\"\n    },\n    {\n      \"slide_number\": 5,\n      \"title\": \"CTA slide title\",\n      \"copy\": \"CTA copy mentioning the solution and next step\",\n      \"image_prompt\": \"Include a clear space in the bottom-right corner for our company logo.\"\n    }\n  ]\n}\n",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a senior B2B SaaS marketer. You turn enterprise storage pain points into high-converting LinkedIn carousel concepts. Always respond with valid JSON only."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        2016,
+        0
+      ],
+      "id": "7dc22eca-603a-4d38-9c02-db4992f18764",
+      "name": "Basic LLM Chain1",
+      "notesInFlow": true,
+      "notes": "This node takes the RSS news summary + extracted pain points and converts them into a well-structured business narrative.\nIt prepares main pain point, ICP, big idea, and slide-wise structure that will be cleaned further in the next AI step."
+    },
+    {
+      "parameters": {
+        "jsCode": "let raw = $json.text || $json.output || '';\nraw = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\n\nlet obj;\ntry {\n  obj = JSON.parse(raw);\n} catch (e) {\n  return [{ json: { parse_error: e.message, raw } }];\n}\n\nreturn [{\n  json: {\n    main_pain_point: obj.main_pain_point,\n    icp: obj.icp,\n    big_idea: obj.big_idea,\n    slides: obj.slides\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        0
+      ],
+      "id": "74afe194-803b-4019-bf5e-896a6185903c",
+      "name": "JSON Parsor1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const slides = $json.slides || [];\nconst main_pain_point = $json.main_pain_point;\nconst icp = $json.icp;\nconst big_idea = $json.big_idea;\nconst caption = $json.caption;   // 👈 new\n\nreturn slides.map(slide => ({\n  json: {\n    slide_number: slide.slide_number,\n    title: slide.title,\n    copy: slide.copy,\n    image_prompt: slide.image_prompt,\n    main_pain_point,\n    icp,\n    big_idea,\n    caption,                     // 👈 pass it through\n  }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2992,
+        0
+      ],
+      "id": "da0f1155-5887-4738-98a9-d6a854c9d1a4",
+      "name": "Slide generator",
+      "notesInFlow": true,
+      "notes": "This node structures the final carousel slide data that will later be used for image generation (or passed to HTTP Request if image credits are limited). It takes the processed insights and formats them into a clean JSON object for each slide."
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash-image",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash-image (Nano Banana)"
+        },
+        "prompt": "={{$json[\"image_prompt\"] + \"\\n\\nGenerate a clean and modern LinkedIn carousel slide, 1080x1080, strong contrast, easy-to-read text layout, professional B2B style.\"}}\n",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        3408,
+        -160
+      ],
+      "id": "52b6f9a2-a3c8-43e7-8b94-5628f16a1548",
+      "name": "Generate an image",
+      "notesInFlow": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "EviAXsy1YxhJE0RX",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      },
+      "disabled": true,
+      "notes": "This node is designed to automatically generate AI-based LinkedIn carousel images using the image_prompt extracted from real-time industry news. The prompt ensures a clean, modern, B2B-style slide suitable for enterprise audiences."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9b49d96f-b518-4f94-9302-25a69e2ba9d3",
+              "leftValue": "={{ false }}\n",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3200,
+        0
+      ],
+      "id": "8c01acf9-8ba8-470a-a01c-305a5fb6e276",
+      "name": "If",
+      "notesInFlow": true,
+      "notes": "This IF node was added only to demonstrate that the workflow supports AI image generation, even though actual image generation was skipped due to limited credits."
+    },
+    {
+      "parameters": {
+        "url": "={{ \n  $json[\"slide_number\"] == 5\n    ? 'https://placehold.co/1080x1080/png?text=LOGO'\n    : 'https://placehold.co/1080x1080/png?text=Slide+' + $json[\"slide_number\"]\n}}\n",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3424,
+        240
+      ],
+      "id": "cf7fa1d3-71c3-4b56-8121-0296815ec9f5",
+      "name": "HTTP Request",
+      "alwaysOutputData": true,
+      "notesInFlow": true,
+      "notes": "This node generates placeholder images for all 5 LinkedIn carousel slides using an external image API (placehold.co).\nIt ensures that the workflow remains fully functional even without AI image credits, while still showcasing the logic for auto-generation."
+    },
+    {
+      "parameters": {
+        "jsCode": "const { main_pain_point, icp, big_idea, summary } = $json;\n\nconst caption =\n`🔥 ${big_idea}\n\n💥 Main pain: ${main_pain_point}\n\n👤 Ideal customer:\n${icp}\n\n📌 Summary of recent news:\n${summary}\n\nSwipe through the carousel to see:\n1️⃣ Why this hurts today\n2️⃣ What a modern data foundation looks like\n3️⃣ How unified storage unlocks AI\n\n#EnterpriseStorage #AI #DataSilos #LinkedInCarousel`;\n\nreturn [{ json: { ...$json, caption } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2576,
+        0
+      ],
+      "id": "d96b7ea9-b676-4fcf-babf-82a614a68847",
+      "name": "Caption builder",
+      "notesInFlow": true,
+      "notes": "This node creates the final LinkedIn caption using the structured output from previous LLM steps.\nIt converts the insights (main pain point, ICP, big idea, and news summary) into a polished post caption."
+    },
+    {
+      "parameters": {
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        3984,
+        96
+      ],
+      "id": "36ccb01f-f450-4aca-b7a2-c6fedcb8afca",
+      "name": "Create a post",
+      "notesInFlow": true,
+      "disabled": true,
+      "notes": "Creates a LinkedIn Post"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: $json\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "3f28502c-feeb-42e0-9745-806d99c79fd8",
+      "name": "Json Convertor",
+      "notesInFlow": true,
+      "notes": "this converts the output of form into json format\n"
+    },
+    {
+      "parameters": {
+        "jsCode": "const urls = $json.rss_sources || [];\n\nreturn urls.map(url => {\n  return {\n    json: {\n      rss_url: url\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "d6d89168-7b36-4715-8c42-9693e82cefba",
+      "name": "RSS URL Splitter",
+      "notesInFlow": true,
+      "notes": "This node converts the array of RSS sources into individual items, so that each RSS link can be processed separately in the next nodes."
+    },
+    {
+      "parameters": {
+        "jsCode": "// All items coming from HTTP Request (5 slides)\nconst items = $items();\n\n// Take caption from the first item (it was added earlier and is the same for all)\nconst caption = items[0]?.json?.caption ?? \"\";\n\n// Build an array with info for each slide\nconst slides = items.map(item => {\n  const { slide_number, title, copy, image_prompt } = item.json;\n  const img = item.binary?.data;\n\n  return {\n    slide_number,\n    title,\n    body: copy,\n    image_prompt,\n    image_info: img\n      ? {\n          fileName: img.fileName,\n          mimeType: img.mimeType,\n          size: img.fileSize,\n        }\n      : null,\n  };\n});\n\n// Return a single item that summarizes the whole carousel\nreturn [\n  {\n    json: {\n      caption,\n      slides,\n      note:\n        \"This object summarizes the 5-slide LinkedIn carousel. \" +\n        \"Images are generated separately by the HTTP Request node \" +\n        \"and uploaded manually to LinkedIn.\",\n    },\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3776,
+        96
+      ],
+      "id": "88f79f3f-d30f-4ff4-bbbe-670527628070",
+      "name": "Format Slides + Caption Builder",
+      "notesInFlow": true,
+      "notes": "This node combines all slide data + caption into a single structured output."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Json Convertor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "RSS URL Splitter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Format Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Articles": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "JSON Parsor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON Parsor": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain1": {
+      "main": [
+        [
+          {
+            "node": "JSON Parsor1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON Parsor1": {
+      "main": [
+        [
+          {
+            "node": "Caption builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slide generator": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Generate an image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Format Slides + Caption Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Caption builder": {
+      "main": [
+        [
+          {
+            "node": "Slide generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate an image": {
+      "main": [
+        [
+          {
+            "node": "Format Slides + Caption Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Json Convertor": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS URL Splitter": {
+      "main": [
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Slides + Caption Builder": {
+      "main": [
+        [
+          {
+            "node": "Create a post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "130f98d9-3a9a-4fc4-b516-e0cf14cbdd81",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fb3ddd724f2f815cf2e62e2caf18493836a511eab48f84f0357d54ac21fe5be5"
+  },
+  "id": "3Px8KHjG3DTJeFRA",
+  "tags": []
+}
